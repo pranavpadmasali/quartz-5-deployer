@@ -19,11 +19,11 @@ Name it:
 
 > Either works. The blog figures out its own address automatically — you never edit a URL.
 
-### 2. Turn on GitHub Pages
+### 2. Turn on GitHub Pages (one time)
 
-In your new repo: **Settings → Pages → Build and deployment → Source → GitHub Actions**.
+In your new repo, go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
 
-> Often this is already enabled for you on the first deploy. If your site 404s, this is the first thing to check.
+> This is the one manual click GitHub requires — it can't be automated for a new repo. Do it once and every future push deploys on its own.
 
 ### 3. Make it yours
 
