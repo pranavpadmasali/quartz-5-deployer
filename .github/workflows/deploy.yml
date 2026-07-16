@@ -1,0 +1,102 @@
+name: Deploy blog to GitHub Pages
+
+# Runs on every push to your default branch, and can be triggered manually
+# from the Actions tab. No editing required — it just works on your repo.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Permissions the deploy needs (also lets it auto-enable Pages the first time).
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deploy at a time; don't cancel an in-progress one.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # fetch full history so post dates from git work
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Configure GitHub Pages
+        # Turns on Pages (Source = GitHub Actions) automatically on first run.
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Cache Quartz plugins
+        uses: actions/cache@v5
+        with:
+          path: .quartz/plugins
+          key: ${{ runner.os }}-plugins-${{ hashFiles('quartz.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-plugins-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Quartz plugins
+        run: npx quartz plugin install
+
+      - name: Set baseUrl automatically
+        # Fills in `baseUrl` from your repo so you never have to.
+        #   - user/org site (repo named <you>.github.io) -> <you>.github.io
+        #   - project site (any other repo name)          -> <you>.github.io/<repo>
+        # If you've already changed baseUrl (e.g. a custom domain), it's left alone.
+        run: |
+          node -e '
+          const fs = require("fs");
+          const f = "quartz.config.yaml";
+          let s = fs.readFileSync(f, "utf8");
+          const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+          const o = owner.toLowerCase();
+          const derived = repo === `${o}.github.io` ? `${o}.github.io` : `${o}.github.io/${repo}`;
+          const m = s.match(/^([ \t]*)baseUrl:[ \t]*(.*)$/m);
+          if (m && m[2].trim() === "example.github.io") {
+            s = s.replace(/^([ \t]*)baseUrl:.*$/m, `$1baseUrl: ${derived}`);
+            fs.writeFileSync(f, s);
+            console.log("baseUrl set to " + derived);
+          } else {
+            console.log("Keeping your custom baseUrl: " + (m ? m[2].trim() : "(not found)"));
+          }
+          '
+
+      - name: Build site
+        run: npx quartz build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
